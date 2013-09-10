@@ -40,7 +40,8 @@ foreach (0..$level) {
 		my $pyFile = $f;
 		$pyFile =~ s/.pl/.py/;
 
-		if (`diff $temp $pyFile`) {
+		if (my $diff = `diff $temp $pyFile`) {
+			print $diff;
 			unlink $temp;
 			die "\t\tTest failed on $f\n";
 		} else {

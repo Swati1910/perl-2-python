@@ -17,6 +17,11 @@ while (my $line = <>) {
 	} elsif ($line =~ /^\s*#/ || $line =~ /^\s*$/) {
 		print $line;
 
+	# Capture variable declarations
+	} elsif ($line =~ /^\$(.*)/) {
+		print "$1";
+
+
 	# Python's print adds a new-line character by default
 	# so we need to delete it from the Perl print statement
 	} elsif ($line =~ /^\s*print\s*"(.*)\\n"[\s;]*$/) {
