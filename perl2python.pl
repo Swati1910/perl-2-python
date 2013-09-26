@@ -9,12 +9,14 @@ my $debugOn = 0;	#set to 1 to turn debug messages on.
 
 sub debug($);
 sub extractVariables(\@);
-sub hashBang(\@);
 sub convertPerl2Python(\@);
 
+sub addHashBang;
 sub addCommentLine($);
 sub addPrintStatement($);
+sub addComplicatedPrint($);
 sub addVariableDec($);
+sub addComment($);
 
 my @output;
 my %variables;
@@ -26,9 +28,7 @@ open PERL, $ARGV[0] or die "Could not open file $ARGV[0]: $!\n";
 
 my @perl = <PERL>;
 
-
 extractVariables(@perl);
-hashBang(@perl);
 convertPerl2Python(@perl);
 print @output;
 
@@ -48,8 +48,12 @@ sub convertPerl2Python(\@) {
 		# Replace any occurance of ';' with nothing.
 		$line =~ s/;//;
 
+		if ($line =~ /^#!/) {
+			addHashBang;
+		}
+
 		# Add comments with Python comment indicator.
-		if ($line !~ /^#!/ && $line =~ /^\s*#/ || $line =~ /^\s*$/) {
+		elsif ($line !~ /^#!/ && $line =~ /^\s*#/ || $line =~ /^\s*$/) {
 			addCommentLine($line);
 		}
 
@@ -62,19 +66,21 @@ sub convertPerl2Python(\@) {
 		elsif ($line =~ /^\s*print\s*"(.*)\\n"[\s;]*$/) {
 			addPrintStatement($1);
 		}
+
+		elsif ($line =~ /^\s*print\s*\$/) {
+			addComplicatedPrint($line);
+		}
 		
-		
+		else {
+			addComment($line);
+			debug("Don't know what to do with: $line\n");
+		}
 	}
 
 }
 
-sub hashBang(\@) {
-	my $array_ref = shift;
-	
-	#NB: Changing $line changes @original_array!
-	if (@$array_ref[0] =~ /^#!/) {
-		unshift(@output, "#!/usr/bin/python2.7 -u\n");
-	}
+sub addHashBang {
+	unshift(@output, "#!/usr/bin/python2.7 -u\n");
 }
 
 sub extractVariables(\@) {
@@ -104,7 +110,7 @@ sub addPrintStatement($) {
 	my $line = shift;
 
 	if ($line =~ /\$\w+/) {
-			$line =~ s/\$//;
+			$line =~ s/\$//g;
 		}
 
 	if (defined($variables{$line})) {
@@ -112,9 +118,30 @@ sub addPrintStatement($) {
 	} else {
 		$line = "print \"$line\"";
 	}
+
 	push(@output, "$line\n");
 }
 
+sub addComplicatedPrint($) {
+	my $line = shift;
+	$line =~ s/print //;
+	my @split = split(',' ,$line);
+	
+	my $variables = $split[0];
+	my $string = $split[1];
+
+	$variables =~ s/\$//g;
+
+	my $printStatement = "print ";
+	$printStatement .= $variables;
+
+	if ($string !~ /\"\\n\"/) {
+		$printStatement .= " , ";
+		$printStatement .= "\"$string\"";
+	}
+
+	push(@output, $printStatement);
+}
 
 sub addVariableDec($) {
 	my $line = shift;
@@ -126,6 +153,12 @@ sub addVariableDec($) {
 	push(@output, "$line\n");
 }
 
+sub addComment($) {
+	my $line = "#";
+	$line.=shift;
+
+	push(@output, "$line\n");
+}
 
 sub debug($) {
 	my $toPrint = shift;
