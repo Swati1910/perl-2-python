@@ -1,0 +1,12 @@
+--- answer5.py	2013-09-28 14:20:46.318804252 +1000
++++ answer5.pl.py1380342058	2013-09-28 14:20:58.142862882 +1000
+@@ -2,7 +2,7 @@
+ 
+ answer = 41
+ if answer > 0:
+-    answer = answer + 2
++	answer = answer + 2
+ if answer == 43:
+-    answer = answer - 1
++	answer = answer - 1
+ print answer

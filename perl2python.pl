@@ -9,6 +9,7 @@ my $debugOn = 0;	#set to 1 to turn debug messages on.
 
 sub debug($);
 sub extractVariables(\@);
+sub findImports(\@);
 sub convertPerl2Python(\@);
 
 sub addHashBang;
@@ -17,6 +18,7 @@ sub addPrintStatement($);
 sub addComplicatedPrint($);
 sub addVariableDec($);
 sub addComment($);
+sub addConditional($);
 
 my @output;
 my %variables;
@@ -27,6 +29,16 @@ my %variables;
 open PERL, $ARGV[0] or die "Could not open file $ARGV[0]: $!\n";
 
 my @perl = <PERL>;
+
+# Order is important here.
+# Build the new file as follows:
+#	1. Hashbang -> not _that_ important as we can easily
+#		add to the beginning at anytime.
+#	2. Any required imports -> this must be done before
+#		code, as it's far more difficult to insert in 
+#		the correct place.
+#	3. Blank line
+#	4. Program code
 
 extractVariables(@perl);
 convertPerl2Python(@perl);
@@ -39,42 +51,78 @@ sub convertPerl2Python(\@) {
 	my $array_ref = shift;
 	my @code = @$array_ref;
 
+	my $insideConditional = 0;
+
+
 	#NB: Changing $line changes @original_array!
 	# We iterate over the file line by line.
 	foreach my $line (@$array_ref){
 
 		chomp($line);
 
-		# Replace any occurance of ';' with nothing.
-		$line =~ s/;//;
+		if (!$insideConditional) {
 
-		if ($line =~ /^#!/) {
-			addHashBang;
+			# Replace any occurance of ';' with nothing.
+			$line =~ s/;//;
+
+			if ($line =~ /^#!/) {
+				addHashBang;
+			}
+
+			# Add comments with Python comment indicator.
+			elsif ($line !~ /^#!/ && $line =~ /^\s*#/ || $line =~ /^\s*$/) {
+				addCommentLine($line);
+			}
+
+			# Add variable declarations.
+			elsif ($line =~ /^\$\w*/ || $line =~ /^my \w*/) {
+				addVariableDec($line);
+			}
+
+			# Add print statements.
+			elsif ($line =~ /^\s*print\s*"(.*)\\n"[\s;]*$/) {
+				addPrintStatement($1);
+			}
+
+			# If the print statement is more complicated than 
+			#	just "print $variable" or "print string" we handle
+			#	it differently.
+			elsif ($line =~ /^\s*print\s*\$/) {
+				addComplicatedPrint($line);
+			}
+			
+			# Start of conditional statement
+			elsif ($line =~ /^if.*{$/i || $line =~ /^while.*{$/i) {
+				addConditional($line);
+				$insideConditional++;
+			}
+
+			# If we don't know what to do, add the line as a 
+			#	comment
+			else {
+				addComment($line);
+				debug("Don't know what to do with: $line\n");
+			}
+
+
+		# We reach this point if we are inside an if loop.
+		#	The condition has already been printed, we just 
+		#	need to output the guts of the statement now.
+		} elsif ($insideConditional) {
+			if ($line !~ /\s*}\s*/) {
+				$line =~ s/\s*//;
+				push (@output, "    ") foreach (1..$insideConditional);
+				my @line = $line;
+				convertPerl2Python(@line);
+			} else {
+				$insideConditional = 0;
+			}
 		}
 
-		# Add comments with Python comment indicator.
-		elsif ($line !~ /^#!/ && $line =~ /^\s*#/ || $line =~ /^\s*$/) {
-			addCommentLine($line);
-		}
 
-		# Add variable declarations.
-		elsif ($line =~ /^\$\w*/ || $line =~ /^my \w*/) {
-			addVariableDec($line);
-		}
 
-		# Add print statements.
-		elsif ($line =~ /^\s*print\s*"(.*)\\n"[\s;]*$/) {
-			addPrintStatement($1);
-		}
 
-		elsif ($line =~ /^\s*print\s*\$/) {
-			addComplicatedPrint($line);
-		}
-		
-		else {
-			addComment($line);
-			debug("Don't know what to do with: $line\n");
-		}
+
 	}
 
 }
@@ -99,6 +147,24 @@ sub extractVariables(\@) {
 		}
 	}
 }
+
+sub findImports(\@) {
+	my $array_ref = shift;
+
+	#NB: Changing $line changes @original_array!
+	foreach my $line (@$array_ref){
+		
+		if ($line =~ /\s*sys\..*/) {
+
+		#add the names to the hash so we know whether to put ""s 
+		#	in python print statement or not (ie printing string or variable?)
+			my @variable = split (' =',$1);
+			$variables{$variable[0]}++;
+			debug("Added $variable[0] to the hash.");
+		}
+	}
+}
+
 
 sub addCommentLine($) {
 	my $comment = shift;
@@ -159,6 +225,19 @@ sub addComment($) {
 
 	push(@output, "$line\n");
 }
+
+
+sub addConditional($) {
+	my $protasis = shift;
+	$protasis =~ s/\(//;
+	$protasis =~ s/\)//;
+	$protasis =~ s/\{//;
+	$protasis =~ s/\$//;
+	$protasis =~ s/\s*$//;
+	push(@output, "$protasis:\n");
+}
+
+
 
 sub debug($) {
 	my $toPrint = shift;
