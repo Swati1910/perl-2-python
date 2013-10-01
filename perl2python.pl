@@ -4,13 +4,16 @@
 use warnings;
 use strict;
 
-my $debugOn = 0;	#set to 1 to turn debug messages on.
+my $debugOn = 1;	#set to 1 to turn debug messages on.
 
 
 sub debug($);
+sub removeSemiColons(\@);
 sub extractVariables(\@);
 sub findImports(\@);
+sub convertSysCalls(\@);
 sub convertPerl2Python(\@);
+
 
 sub addHashBang;
 sub addCommentLine($);
@@ -19,6 +22,10 @@ sub addComplicatedPrint($);
 sub addVariableDec($);
 sub addComment($);
 sub addConditional($);
+sub addSTDIN($);
+
+# TESTING
+sub printAllVars;
 
 my @output;
 my %variables;
@@ -42,10 +49,14 @@ my @perl = <PERL>;
 #	3. Blank line
 #	4. Program code
 
+removeSemiColons(@perl);
 extractVariables(@perl);
 findImports(@perl);
+convertSysCalls(@perl);
 convertPerl2Python(@perl);
 print @output;
+
+#printAllVars;
 
 close PERL;
 
@@ -67,8 +78,7 @@ sub convertPerl2Python(\@) {
 		}
 
 
-		# Replace any occurance of ';' with nothing.
-		$line =~ s/;//;
+		
 		# delete leading whitespace.
 		$line =~ s/^\s*//;
 
@@ -98,21 +108,42 @@ sub convertPerl2Python(\@) {
 			addComplicatedPrint($line);
 		}
 		
+		# Check for prompt prints
+		elsif ($line =~ /.*print "> "/ && defined($imports{sys})) {
+			push(@output, "sys.stdout.write(\"> \")\n");
+		}
+
 		# Start of conditional statement
 		elsif ($line =~ /^\s*if.*{\s*$/i || $line =~ /^\s*while.*{\s*$/i) {
 			$insideConditional++;
 			addConditional($line);
 		}
 
+		# We see <STDIN>
+		elsif ($line =~ "<STDIN>") {
+			addSTDIN($line);
+		}
+
+		# Closing brace
 		elsif ($line =~ /^\s*}\s*$/) {
 			$insideConditional--;
+		}
+
+		#Closing brace with else
+		elsif ($line =~ /^\s*}\s*else\s*{/) {
+			pop(@output);
+			push(@output, "else:\n");
+		}
+
+		#Handle blank lines
+		elsif ($line =~ /^\s+$/) {
+			push(@output, "\n");
 		}
 
 		# If we don't know what to do, add the line as a 
 		#	comment
 		else {
 			addComment($line);
-			debug("Don't know what to do with: $line\n");
 		}
 
 	}
@@ -129,13 +160,17 @@ sub extractVariables(\@) {
 	#NB: Changing $line changes @original_array!
 	foreach my $line (@$array_ref){
 		
-		if ($line =~ /.*\$(\w*)/ or $line =~ /.* my \$(\w*)/) {
+		if ($line =~ /.*\$(\w*)\s*=\s*(.*)/ or $line =~ /.* my \$(\w*)\s*=\s*(.*)/) {
 
 		#add the names to the hash so we know whether to put ""s 
 		#	in python print statement or not (ie printing string or variable?)
 			my @variable = split (' =',$1);
-			$variables{$variable[0]}++;
-			debug("Added $variable[0] to the hash.");
+			if (!defined($variables{$variable[0]})) {
+	
+				my $assignment = $2;
+				$assignment =~ s/\"//g;
+				$variables{$variable[0]} = $assignment;
+			}
 		}
 	}
 }
@@ -162,11 +197,40 @@ sub findImports(\@) {
 		#regex -> re
 		if ($line =~ /\=\~/) {
 			$imports{re}++;
-			debug("Added re to imports\n");
 		}		
 	}
 
+	foreach my $key (keys %imports) {
+		push(@output, "import $key");
+	}
+	
+	if (defined($imports{fileinput}) ||
+		defined($imports{sys}) ||
+		defined($imports{re})) {
+		push(@output, "\n");
+	}
 }
+
+
+sub convertSysCalls(\@) {
+	my $array_ref = shift;
+
+	#NB: Changing $line changes @original_array!
+	foreach my $line (@$array_ref){
+		$line =~ s/\<STDIN\>/sys.stdin.readline()/g;
+	}
+}
+
+sub removeSemiColons(\@) {
+	my $array_ref = shift;
+
+	#NB: Changing $line changes @original_array!
+	foreach my $line (@$array_ref){
+		# Replace any occurance of ';' with nothing.
+		$line =~ s/;//;
+	}
+}
+
 
 
 sub addCommentLine($) {
@@ -181,6 +245,7 @@ sub addPrintStatement($) {
 	if ($line =~ /\$\w+/) {
 			$line =~ s/\$//g;
 		}
+
 
 	if (defined($variables{$line})) {
 		$line = "print $line";
@@ -212,14 +277,53 @@ sub addComplicatedPrint($) {
 	push(@output, $printStatement);
 }
 
+# If a variable is defined as one thing, and then 
+#	assigned to something different, we need to 
+#	cast it.
 sub addVariableDec($) {
 	my $line = shift;
-	
+
 	$line =~ /^\$(.*)/ or $line =~ /^my \$(.*)/;
 	$line =~ s/\$//g;
 	$line =~ s/^my //;
 	
-	push(@output, "$line\n");
+	my @assignment = split(' = ', $line);
+
+#debug($variables{$assignment[0]});
+#debug($assignment[1]);
+
+	if (defined($variables{$assignment[0]})) {
+		# Check what type it is HAS been declared previously
+		#	against what is being assigned to it now.
+		# Case 1: HAS been assigned an int, IS being assigned an int.
+		if ($variables{$assignment[0]} =~  /^\s*\d+\s*/ &&
+			$assignment[1] =~  /^\s*\d+\s*/) {
+			push(@output, "$line\n");
+		# Case 2: HAS been assigned an int, IS being assigned a string.
+		} elsif ($variables{$assignment[0]} =~  /^\s*\d+\s*/ &&
+			$assignment[1] =~  /^\s*\w+\s*/) {
+			my $values = $assignment[1];
+			$values =~ s/\+//;
+			$values =~ s/\-//;
+			my @values = split(' ', $values);
+			# If there's more than one value being assigned to it, just assume 
+			#	the word must be a variable.
+			if (@values > 1) {
+				push(@output, "$line\n");
+				} else {
+					push(@output, "$assignment[0] = int($assignment[1])\n") ;
+				}
+		# Case 3: HAS been assigned a string, IS being assigned a string
+		} elsif ($variables{$assignment[0]} =~  /^\s*\w+\s*/ &&
+			$assignment[1] =~  /^\s*\"\w+\"\s*/) {
+			push(@output, "$line\n");
+		} else {
+			push(@output, "$line\n");
+		}
+
+	} else {
+		push(@output, "$line\n");
+	}
 }
 
 sub addComment($) {
@@ -241,6 +345,12 @@ sub addConditional($) {
 }
 
 
+sub printAllVars {
+	print("ALL VARIABLES:\n");
+	while( my( $key, $value ) = each %variables ){
+    print "$key: $value\n";
+	}
+}
 
 sub debug($) {
 	my $toPrint = shift;
