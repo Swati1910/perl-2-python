@@ -11,4 +11,3 @@ while number >= 0:
         else:
             print "Odd"
 print "Bye"
-

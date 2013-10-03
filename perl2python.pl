@@ -23,6 +23,11 @@ sub addVariableDec($);
 sub addComment($);
 sub addConditional($);
 sub addSTDIN($);
+sub addElsif($);
+sub addChomp($);
+sub addResub($);
+sub addForeach($);
+sub addPostIncOrDec($);
 
 # TESTING
 sub printAllVars;
@@ -92,12 +97,12 @@ sub convertPerl2Python(\@) {
 		}
 
 		# Add variable declarations.
-		elsif ($line =~ /^\$\w*/ || $line =~ /^my \w*/) {
+		elsif ($line !~ /.*=~.*/ && $line =~ /^\$\w*\s*=\s*/ || $line =~ /^my \$\w*\s*=\s*/) {
 			addVariableDec($line);
 		}
 
 		# Add print statements.
-		elsif ($line =~ /^\s*print\s*"(.*)\\n"[\s;]*$/) {
+		elsif ($line =~ /^\s*print\s*\"(.*)\\n\"[\s;]*$/) {
 			addPrintStatement($1);
 		}
 
@@ -109,14 +114,21 @@ sub convertPerl2Python(\@) {
 		}
 		
 		# Check for prompt prints
-		elsif ($line =~ /.*print "> "/ && defined($imports{sys})) {
-			push(@output, "sys.stdout.write(\"> \")\n");
+		elsif ($line =~ /.*print "(>) "/ && defined($imports{sys}) ||
+			   $line =~ /.*print \"(.*:)\s*\"/ && defined($imports{sys})) {
+			push(@output, "sys.stdout.write(\"$1 \")\n");
 		}
 
 		# Start of conditional statement
-		elsif ($line =~ /^\s*if.*{\s*$/i || $line =~ /^\s*while.*{\s*$/i) {
+		elsif ($line =~ /^\s*if.*{\s*$/i || 
+			   $line =~ /^\s*while.*{\s*$/i) {
 			$insideConditional++;
 			addConditional($line);
+		}
+
+		# Handle elsifs differently to normal conditionals
+		elsif ($line =~ /^\s*}\s*elsif\s*\(.*\)\s*{/) {
+			addElsif($line);
 		}
 
 		# We see <STDIN>
@@ -133,6 +145,27 @@ sub convertPerl2Python(\@) {
 		elsif ($line =~ /^\s*}\s*else\s*{/) {
 			pop(@output);
 			push(@output, "else:\n");
+		}
+
+		# CHOMP!
+		elsif ($line =~ /\s*chomp\s*\$\w+/i) {
+			addChomp($line);
+		}
+
+		# regex SUB (eg line =~ s/[aeiou]//g;)
+		elsif ($line =~ /\s*\w+\s*=~\s*s\/\[?]?.*\/.*\/[ig]/i) {
+			addResub($line);
+		}
+
+		# foreach
+		elsif ($line =~ /.*foreach.*/) {
+			$insideConditional++;
+			addForeach($line);
+		}
+
+		# $a++ or $a--
+		elsif ($line =~ /\s*\w+\+\+/ || $line =~ /\s*\w+\-\-/) {
+			addPostIncOrDec($line);
 		}
 
 		#Handle blank lines
@@ -200,10 +233,24 @@ sub findImports(\@) {
 		}		
 	}
 
-	foreach my $key (keys %imports) {
-		push(@output, "import $key");
+	my $num_imports = keys %imports;
+	my $counter;
+
+	if (defined($imports{fileinput}) ||
+		defined($imports{sys}) ||
+		defined($imports{re})) {
+			push(@output, "import");
 	}
-	
+
+	foreach my $key (keys %imports) {
+		$counter++;
+		if ($counter == $num_imports) {
+			push(@output, " $key");
+		} else {
+			push(@output, " $key,");
+		}
+	}
+
 	if (defined($imports{fileinput}) ||
 		defined($imports{sys}) ||
 		defined($imports{re})) {
@@ -241,13 +288,23 @@ sub addCommentLine($) {
 
 sub addPrintStatement($) {
 	my $line = shift;
+debug($line);
+printAllVars;
+
+	my @toPrint = split(' ', $line);
+
+	foreach my$x (@toPrint) {
+		print "$x\n";
+	}
 
 	if ($line =~ /\$\w+/) {
 			$line =~ s/\$//g;
 		}
 
-
-	if (defined($variables{$line})) {
+	if ($line =~ /ARGV\[(.*)\]/) {
+		$line = "print sys.argv[$1 + 1]";
+	}
+	elsif (defined($variables{$line})) {
 		$line = "print $line";
 	} else {
 		$line = "print \"$line\"";
@@ -288,9 +345,11 @@ sub addVariableDec($) {
 	$line =~ s/^my //;
 	
 	my @assignment = split(' = ', $line);
-
 #debug($variables{$assignment[0]});
-#debug($assignment[1]);
+#debug("$assignment[0]");
+#debug("$assignment[1]");
+#printAllVars;
+
 
 	if (defined($variables{$assignment[0]})) {
 		# Check what type it is HAS been declared previously
@@ -316,13 +375,17 @@ sub addVariableDec($) {
 		# Case 3: HAS been assigned a string, IS being assigned a string
 		} elsif ($variables{$assignment[0]} =~  /^\s*\w+\s*/ &&
 			$assignment[1] =~  /^\s*\"\w+\"\s*/) {
-			push(@output, "$line\n");
+			push(@output, "$line\n"); 
+		# Case 4: assigned to STDIN
+		} elsif ($variables{$assignment[0]} =~ /<STDIN>/){
+			push(@output, "$assignment[0] = int(sys.stdin.readline())\n");
+		
 		} else {
 			push(@output, "$line\n");
 		}
-
+	# HAS NOT been assigned anything, is being assigned SYS.stdin
 	} else {
-		push(@output, "$line\n");
+		push(@output, "##$line\n");
 	}
 }
 
@@ -333,15 +396,87 @@ sub addComment($) {
 	push(@output, "$line\n");
 }
 
-
 sub addConditional($) {
+	my $line = shift;
+	
+	$line =~ s/\(//;
+	$line =~ s/\)//;
+	$line =~ s/\{//;
+	$line =~ s/\$//;
+	$line =~ s/\s*$//;
+
+	# Handle "while line = <>" first
+	if ($line =~ /\s*while\s*(\w+)\s*=\s*<>/ ) {
+		push(@output, "for $1 in fileinput.input():\n");
+	# All other conditionals:
+	# while line = sys.stdin.readline()
+	# for line in sys.stdin:
+	} elsif ($line =~ /\s*while (\w+)\s*=\s*sys\.stdin\.readline\(\)/){
+		push(@output, "for $1 in sys.stdin:\n");		
+	} else {
+		
+		push(@output, "$line:\n");
+	}
+}
+
+sub addElsif($) {
 	my $protasis = shift;
 	$protasis =~ s/\(//;
 	$protasis =~ s/\)//;
 	$protasis =~ s/\{//;
+	$protasis =~ s/\}//;
 	$protasis =~ s/\$//;
 	$protasis =~ s/\s*$//;
-	push(@output, "$protasis:\n");
+	$protasis =~ s/^\s*//;
+	$protasis =~ s/elsif//;
+	#remove one level of indentation
+	pop(@output);
+	push(@output, "elif$protasis:\n");
+}
+
+
+sub addChomp($) {
+	my $line = shift;
+	$line =~ /\s*chomp\s*\$(\w+)/;
+	push(@output, "$1 = $1.rstrip()\n");
+}
+
+
+# Translates a = s/x/y/ to a= re.sub(r'x', 'y', a)
+sub addResub($) {
+	my $line = shift;
+	$line =~ /\s*\$?(\w+)\s*=~\s*s\/(\[?]?.*)\/(.*)\/[ig]/;
+
+	push(@output, "$1 = re.sub(r\'$2\', \'$3\', $1)\n");
+}
+
+# foreach $i (0..$#ARGV) {
+# for i in xrange(len(sys.argv) - 1):
+# Translates 'foreach a (b..c)' to 'for a in xrange()
+sub addForeach($) {
+	my $line = shift;	
+	$line =~ s/\$//;
+	$line =~ s/{//;	
+	$line =~ /\s*foreach\s*(\w+)\s*\((.*)\.\.(.*)\)/;
+
+	my $capture1 = $1;
+	my $capture2 = $2;
+	my $capture3 = $3;
+
+	if ($capture3 =~ /#ARGV/) {
+		push(@output, "for $capture1 in xrange(len(sys.argv) - 1):\n");
+	}
+
+	#push(@output, "for $1 in xrange $2 $3\n");
+	
+}
+
+sub addPostIncOrDec($) {
+	my $line = shift;
+	$line =~ /\s*(\w+)(.*)/;
+	my @incOrDec = split('', $2);
+
+	push(@output, "$1 $incOrDec[0]= 1\n");
 }
 
 

@@ -40,6 +40,8 @@ foreach (0..$level) {
 		my $pyFile = $f;
 		$pyFile =~ s/.pl/.py/;
 
+
+
 		print ("\tChecking program against desired program...");
 		if (my $diff = `diff $temp $pyFile`) {
 			system "gedit $f $temp $pyFile";
@@ -50,7 +52,7 @@ foreach (0..$level) {
 		}
 		unlink $temp;
 
-		
+=begin		
 		print "\tChecking program output...";
 		system "perl $f > perl.output";
 		system "python $pyFile > python.output";
@@ -65,7 +67,7 @@ foreach (0..$level) {
 		}
 		unlink "perl.output";
 		unlink "python.output";
+=cut
+
 	}
-
-
 }
