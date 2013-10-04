@@ -318,7 +318,6 @@ sub addComplicatedPrint($) {
 #debug($line);
 #printAllVars;
 
-
 	my @toPrint = split(' ', $line) ;
 
 
