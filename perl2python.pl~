@@ -208,6 +208,11 @@ sub extractVariables(\@) {
 		} elsif ($line =~ /\s*foreach\s*\$(\w+).*/) {
 			$variables{$1} = 1;
 		}
+
+		# treat sys.argv[.*] as a defined variable
+		if ($line =~ /.*argv\[\$?(\w+)\].*/i) {
+			$variables{"sys.argv[$1]"}++;
+		}
 	}
 }
 
@@ -318,8 +323,14 @@ sub addComplicatedPrint($) {
 #debug($line);
 #printAllVars;
 
-	my @toPrint = split(' ', $line) ;
+	my @toPrint;
 
+	if ($line !~ /.*argv.*/) {
+		@toPrint = split(' ', $line) ;
+	} else {
+		@toPrint = $line;
+	
+	}
 
 	my @varPrint;
 	my @strPrint;
@@ -328,10 +339,11 @@ sub addComplicatedPrint($) {
 		foreach my $x (@toPrint) {
 			$x =~ s/\s*//g;
 			$x =~ s/\$//;
-			$x =~ s/,//g;
+			$x =~ s/,//g; 
 			if (defined($variables{$x})) {
-				push(@varPrint, $x);
+				push(@varPrint, "$x, ");
 			} elsif ($x =~ /[+*-\/%]/) {			
+debug($varPrint[-1]);				
 				push(@varPrint, " $x ");
 			} else {
 				push(@strPrint, $x);
@@ -339,14 +351,14 @@ sub addComplicatedPrint($) {
 		}
 	} else {
 		if (defined($variables{$toPrint[0]})) {
+			# Handle sys.argv[i]
+			$toPrint[0] =~ s/i/i + 1/ if ($toPrint[0] =~ /sys.argv\[\$?\w+\]/i);
 			push(@varPrint, $toPrint[0]);
-		} else {
-			# Handle sys.argv[i]		
-			$toPrint[0] =~ s/i/i + 1/;			
+		} else {			
 			push(@strPrint, $toPrint[0]);
 		}
 	}
-
+			$varPrint[-1] =~ s/,//; #delete trailing comma
 
 
 	my $printStatement = "print ";
@@ -494,7 +506,7 @@ sub addForeach($) {
 	my $capture2 = $2;
 	my $capture3 = $3;
 
-	if ($capture3 =~ /#ARGV/) {
+	if ($capture3 =~ /\$#sys.ARGV/i) {
 		push(@output, "for $capture1 in xrange(len(sys.argv) - 1):\n");
 	} else {
 		$capture3++;		
