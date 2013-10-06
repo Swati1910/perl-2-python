@@ -29,6 +29,8 @@ sub addResub($);
 sub addForeach($);
 sub addPostIncOrDec($);
 
+sub convertStringConcat($);
+
 # TESTING
 sub printAllVars;
 
@@ -343,7 +345,7 @@ sub addComplicatedPrint($) {
 			if (defined($variables{$x})) {
 				push(@varPrint, "$x, ");
 			} elsif ($x =~ /[+*-\/%]/) {			
-				$varPrint[-1] =~ s/,//; #delete trailing comma				
+				$varPrint[-1] =~ s/, //; #delete trailing comma				
 				push(@varPrint, " $x ");
 			} else {
 				push(@strPrint, $x);
@@ -388,10 +390,13 @@ sub addVariableDec($) {
 	$line =~ s/^my //;
 	
 	my @assignment = split(' = ', $line);
+#debug($line);
 #debug($variables{$assignment[0]});
 #debug("$assignment[0]");
 #debug("$assignment[1]");
 #printAllVars;
+
+	$line = convertStringConcat($line);
 
 
 	if (defined($variables{$assignment[0]})) {
@@ -522,6 +527,26 @@ sub addPostIncOrDec($) {
 	my @incOrDec = split('', $2);
 
 	push(@output, "$1 $incOrDec[0]= 1\n");
+}
+
+
+sub convertStringConcat($) {
+	my $line = shift;	
+	my @string = split('', $line);
+
+	my $numQuotes = 0;
+
+	foreach my $x (@string) {		
+		if ($x =~ "\"") {
+			$numQuotes++;
+		}
+		if ($numQuotes%2 == 0) {
+			$x =~ s/\./+/;
+		}
+	}		
+
+	$line = join('', @string);
+	return $line;
 }
 
 

@@ -4,10 +4,10 @@
 # Found on the cs2041 forums as a demo program
 
 $h = "hello"; 
-$w = "world";
+$w = "world.";
 
 print "$h $w\n";
 
-$hw = $h.$w;
+$hw = $h." ".$w." ";
 
 print "$hw\n";
