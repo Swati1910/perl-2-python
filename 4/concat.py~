@@ -8,6 +8,6 @@ w = "world."
 
 print h, w
 
-hw = h+" "+w+" "
+hw = h+" "+w+".."
 
 print hw

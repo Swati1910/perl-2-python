@@ -534,13 +534,15 @@ sub convertStringConcat($) {
 	my $line = shift;	
 	my @string = split('', $line);
 
+	my @variable = split(' ', $line);
+
 	my $numQuotes = 0;
 
 	foreach my $x (@string) {		
 		if ($x =~ "\"") {
 			$numQuotes++;
 		}
-		if ($numQuotes%2 == 0) {
+		if ($numQuotes%2 == 0 && $variables{$variable[0]} !~ /\d+/) {
 			$x =~ s/\./+/;
 		}
 	}		

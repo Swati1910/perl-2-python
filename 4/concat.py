@@ -6,8 +6,12 @@
 h = "hello"
 w = "world."
 
+n = 3.14;
+
 print h, w
 
 hw = h+" "+w+".."
 
 print hw
+
+print n

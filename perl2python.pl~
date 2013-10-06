@@ -534,6 +534,9 @@ sub convertStringConcat($) {
 	my $line = shift;	
 	my @string = split('', $line);
 
+	my @variable = split(' ', $line);
+debug($variable[0]);
+
 	my $numQuotes = 0;
 
 	foreach my $x (@string) {		
