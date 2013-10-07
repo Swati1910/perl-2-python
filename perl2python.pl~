@@ -337,15 +337,15 @@ sub addComplicatedPrint($) {
 	my @varPrint;
 	my @strPrint;
 
-	if (@toPrint > 1) {
+	if (@toPrint > 1) { 
 		foreach my $x (@toPrint) {
 			$x =~ s/\s*//g;
 			$x =~ s/\$//;
 			$x =~ s/,//g; 
 			if (defined($variables{$x})) {
-				push(@varPrint, "$x, ");
+				push(@varPrint, "$x, ");debug($x);
 			} elsif ($x =~ /[+*-\/%]/) {			
-				$varPrint[-1] =~ s/, //; #delete trailing comma				
+				$varPrint[-1] =~ s/, //; #delete trailing comma
 				push(@varPrint, " $x ");
 			} else {
 				push(@strPrint, $x);
@@ -535,7 +535,6 @@ sub convertStringConcat($) {
 	my @string = split('', $line);
 
 	my @variable = split(' ', $line);
-debug($variable[0]);
 
 	my $numQuotes = 0;
 
@@ -543,7 +542,7 @@ debug($variable[0]);
 		if ($x =~ "\"") {
 			$numQuotes++;
 		}
-		if ($numQuotes%2 == 0) {
+		if ($numQuotes%2 == 0 && $variables{$variable[0]} !~ /\d+/) {
 			$x =~ s/\./+/;
 		}
 	}		

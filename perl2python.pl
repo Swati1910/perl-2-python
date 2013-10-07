@@ -337,7 +337,7 @@ sub addComplicatedPrint($) {
 	my @varPrint;
 	my @strPrint;
 
-	if (@toPrint > 1) {
+	if (@toPrint > 1) { 
 		foreach my $x (@toPrint) {
 			$x =~ s/\s*//g;
 			$x =~ s/\$//;
@@ -345,7 +345,7 @@ sub addComplicatedPrint($) {
 			if (defined($variables{$x})) {
 				push(@varPrint, "$x, ");
 			} elsif ($x =~ /[+*-\/%]/) {			
-				$varPrint[-1] =~ s/, //; #delete trailing comma				
+				$varPrint[-1] =~ s/, //; #delete trailing comma
 				push(@varPrint, " $x ");
 			} else {
 				push(@strPrint, $x);
