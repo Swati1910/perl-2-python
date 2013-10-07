@@ -8,10 +8,10 @@ $w = "world.";
 
 $n = 3.14;
 
-print "$h $w\n";
+print "$h$w\n";
 
 $hw = $h." ".$w."..";
 
 print "$hw\n";
 
-print $n;
+print "$n\n";

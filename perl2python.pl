@@ -3,6 +3,7 @@
 
 use warnings;
 use strict;
+use diagnostics;
 
 my $debugOn = 1;	#set to 1 to turn debug messages on.
 
@@ -322,50 +323,51 @@ sub addComplicatedPrint($) {
 	$line =~ s/\\n//;
 	$line =~ s/\$//g;
 	$line =~ s/\"//g;
+
 #debug($line);
 #printAllVars;
 
 	my @toPrint;
 
 	if ($line !~ /.*argv.*/) {
-		@toPrint = split(' ', $line) ;
+		@toPrint = split(' ', $line);
 	} else {
-		@toPrint = $line;
-	
+		@toPrint = $line;	
 	}
+
 
 	my @varPrint;
 	my @strPrint;
 
 	if (@toPrint > 1) { 
-		foreach my $x (@toPrint) {
+		foreach my $x (@toPrint) { 
 			$x =~ s/\s*//g;
 			$x =~ s/\$//;
-			$x =~ s/,//g; 
+			$x =~ s/,//g;
 			if (defined($variables{$x})) {
 				push(@varPrint, "$x, ");
 			} elsif ($x =~ /[+*-\/%]/) {			
-				$varPrint[-1] =~ s/, //; #delete trailing comma
+				$varPrint[-1] =~ s/, // if (@varPrint>0); #delete trailing comma
 				push(@varPrint, " $x ");
 			} else {
 				push(@strPrint, $x);
 			}
 		}
-	} else {
+	} else { 
 		if (defined($variables{$toPrint[0]})) {
 			# Handle sys.argv[i]
 			$toPrint[0] =~ s/i/i + 1/ if ($toPrint[0] =~ /sys.argv\[\$?\w+\]/i);
-			push(@varPrint, $toPrint[0]);
+			push(@varPrint, $toPrint[0]); 
 		} else {			
 			push(@strPrint, $toPrint[0]);
 		}
 	}
-			$varPrint[-1] =~ s/,//; #delete trailing comma
-
+			$varPrint[-1] =~ s/,// if (@varPrint>0); #delete trailing comma
 
 	my $printStatement = "print ";
 
 	foreach my $y (@varPrint) {
+		$y =~ s/\s*$// if ($y !~ /\*/);
 		$printStatement .= $y;
 	}
 

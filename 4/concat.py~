@@ -3,11 +3,15 @@
 # This program tests string concatenation
 # Found on the cs2041 forums as a demo program
 
-h = "hello"
+h = "hello" 
 w = "world."
 
-print h, w
+n = 3.14
+
+print h,w 
 
 hw = h+" "+w+".."
 
 print hw
+
+print n
