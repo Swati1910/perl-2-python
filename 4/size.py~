@@ -1,7 +1,7 @@
 #!/usr/bin/python2.7 -u
 import sys
 sys.stdout.write("Enter a number: ")
-a = int(sys.stdin.readline())
+a = float(sys.stdin.readline())
 if a < 0:
     print "negative"
 elif a == 0:

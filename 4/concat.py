@@ -8,7 +8,7 @@ w = "world."
 
 n = 3.14
 
-print h w 
+print h,w
 
 hw = h+" "+w+".."
 

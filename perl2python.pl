@@ -29,6 +29,7 @@ sub addChomp($);
 sub addResub($);
 sub addForeach($);
 sub addPostIncOrDec($);
+sub addNextOrLast($);
 
 sub convertStringConcat($);
 
@@ -170,6 +171,11 @@ sub convertPerl2Python(\@) {
 		# $a++ or $a--
 		elsif ($line =~ /\s*\w+\+\+/ || $line =~ /\s*\w+\-\-/) {
 			addPostIncOrDec($line);
+		}
+
+		# last or next
+		elsif ($line =~ /\s*last\s*/ || $line =~ /\s*next\s*/) {
+			addNextOrLast($line);
 		}
 
 		#Handle blank lines
@@ -448,12 +454,16 @@ sub addComment($) {
 
 sub addConditional($) {
 	my $line = shift;
-	
+#debug($line);	
 	$line =~ s/\(//;
 	$line =~ s/\)//;
 	$line =~ s/\{//;
-	$line =~ s/\$//;
+	$line =~ s/\$//g;
 	$line =~ s/\s*$//;
+	
+	$line =~ s/&&/and/;
+	$line =~ s/\|\|/or/;
+	$line =~ s/!/not / if $line !~ /!=/;
 
 	# Handle "while line = <>" first
 	if ($line =~ /\s*while\s*(\w+)\s*=\s*<>/ ) {
@@ -531,6 +541,12 @@ sub addPostIncOrDec($) {
 	push(@output, "$1 $incOrDec[0]= 1\n");
 }
 
+sub addNextOrLast($) {
+	my $line =shift;
+	$line =~ s/last/break/;
+	$line =~ s/next/continue/;
+	push(@output, "$line\n");
+}
 
 sub convertStringConcat($) {
 	my $line = shift;	
