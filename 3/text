@@ -1,0 +1,5 @@
+In many cases the natural translation of Perl code into Python code will have slightly different semantics. For example, Python's print statement will print an initial space if the preceding character printed was not a new line - Perl's print does not do this. Python's (pre-3.0) division operator (/) truncates its result to an integer if given two integer arguments . Perl does not.
+
+This is a general issue with translating between languages. It is essential that a compiler such as gcc produce a translation to assembler exactly matching the semantics of the program, but our purposes are different.
+
+Our goal is to provide automated-assistance in converting a piece of software. The software will need to subsequently maintained and modified by humans so the simpler natural translation to more human-readable code is more desirable even if the semantics do not match exactly. Translation of large piece of software will not be completely automatic anyway and will require subsequent manual modification.

@@ -21,6 +21,7 @@ sub addCommentLine($);
 sub addPrintStatement($);
 sub addComplicatedPrint($);
 sub addVariableDec($);
+sub addArray($);
 sub addComment($);
 sub addConditional($);
 sub addSTDIN($);
@@ -30,6 +31,8 @@ sub addResub($);
 sub addForeach($);
 sub addPostIncOrDec($);
 sub addNextOrLast($);
+sub addChomp($);
+sub addPush($);
 
 sub convertStringConcat($);
 
@@ -105,8 +108,22 @@ sub convertPerl2Python(\@) {
 			addVariableDec($line);
 		}
 
+		# Array declarations
+		elsif ($line !~ /.*push.*/ && $line =~ /[^\(]@\w+.*/ || 
+				$line =~ /^\s*\@\w+\s*=\s*\(\'?\"?\w+/ || 
+					$line =~ /^\s*\@\w+/) {
+			addArray($line);
+		}
+
+		# Check for prompt prints
+		elsif ($line =~ /.*print "(>) "/ && defined($imports{sys}) ||
+			   $line =~ /.*print \"(.*:)\s*\"/ && defined($imports{sys})) {
+			push(@output, "sys.stdout.write(\"$1 \")\n");
+		}
+
 		# Add print statements.
-		elsif ($line !~ /\".*\$(\w+).*/ && $line =~ /^\s*print\s*\"(.*)\\n\"[\s;]*$/) {			
+		elsif ($line !~ /\".*\$(\w+).*/ && $line =~ /^\s*print\s*\"(.*)\\n\"[\s;]*$/
+				|| $line =~ /\s*print\s*\"([^\$].*)\"/) {	
 			addPrintStatement($1);
 		}
 
@@ -118,11 +135,6 @@ sub convertPerl2Python(\@) {
 			addComplicatedPrint($line);
 		}
 		
-		# Check for prompt prints
-		elsif ($line =~ /.*print "(>) "/ && defined($imports{sys}) ||
-			   $line =~ /.*print \"(.*:)\s*\"/ && defined($imports{sys})) {
-			push(@output, "sys.stdout.write(\"$1 \")\n");
-		}
 
 		# Start of conditional statement
 		elsif ($line =~ /^\s*if.*{\s*$/i || 
@@ -152,8 +164,8 @@ sub convertPerl2Python(\@) {
 			push(@output, "else:\n");
 		}
 
-		# CHOMP!
-		elsif ($line =~ /\s*chomp\s*\$\w+/i) {
+		# we be chomping here
+		elsif ($line =~ /\s*chomp\s*\(?\$\w+\)?/i) {
 			addChomp($line);
 		}
 
@@ -176,6 +188,11 @@ sub convertPerl2Python(\@) {
 		# last or next
 		elsif ($line =~ /\s*last\s*/ || $line =~ /\s*next\s*/) {
 			addNextOrLast($line);
+		}
+
+		# push
+		elsif ($line =~ /\s*push\s*\(/) {
+			addPush($line);
 		}
 
 		#Handle blank lines
@@ -202,6 +219,11 @@ sub extractVariables(\@) {
 
 	#NB: Changing $line changes @original_array!
 	foreach my $line (@$array_ref){
+
+		# Remove any extra trailing newline characters
+		if ($line =~ /\\n\\n\"$/) { 
+			$line =~ s/\\n//;
+		}
 		
 		if ($line =~ /.*\$(\w*)\s*=\s*(.*)/ or $line =~ /.* my \$(\w*)\s*=\s*(.*)/) {
 
@@ -216,6 +238,16 @@ sub extractVariables(\@) {
 			}
 		} elsif ($line =~ /\s*foreach\s*\$(\w+).*/) {
 			$variables{$1} = 1;
+		}
+
+		# Don't forget arrays now!
+		elsif ($line =~ /[^\(]@(\w+).*/ || $line =~ /my @(\w+).*/ 
+				|| $line =~ /@(\w+)\s*=\s*\((.*)\)/) {
+			if (defined($2)) {
+				$variables{$1} = $2;
+			} else {
+				$variables{$1}++;
+			}
 		}
 
 		# treat sys.argv[.*] as a defined variable
@@ -403,8 +435,9 @@ sub addVariableDec($) {
 #debug("$assignment[0]");
 #debug("$assignment[1]");
 #printAllVars;
-
-	$line = convertStringConcat($line);
+	if ($line =~ /.*\..*/) {
+		$line = convertStringConcat($line);
+	}
 
 
 	if (defined($variables{$assignment[0]})) {
@@ -443,6 +476,30 @@ sub addVariableDec($) {
 	} else {
 		push(@output, "##$line\n");
 	}
+}
+
+sub addArray($) {
+	my $line = shift;
+
+	# Array declaration
+	if ($line =~ /[^\(]@\w+.*/) {
+		$line =~ s/my //;
+		$line =~ s/@//;
+		$line .= " = []";
+		push(@output, "$line\n");
+
+	} elsif ($line =~ /^\s*\@\s*(\w+)\s*$/) {
+		$line =~ s/\@//;
+		$line .= " = []";
+		push(@output, "$line\n");
+
+	# Assigning values to an array
+	} elsif ($line =~ /@\w+\s*=\s*\(\'?\"?\w+/) {
+		$line =~ s/@//;
+		$line =~ tr/\(\)/\[\]/;
+		push(@output, "$line\n");
+	}
+
 }
 
 sub addComment($) {
@@ -497,7 +554,7 @@ sub addElsif($) {
 
 sub addChomp($) {
 	my $line = shift;
-	$line =~ /\s*chomp\s*\$(\w+)/;
+	$line =~ /\s*chomp\s*\(?\$?(\w+)\)?/;
 	push(@output, "$1 = $1.rstrip()\n");
 }
 
@@ -515,21 +572,37 @@ sub addResub($) {
 # Translates 'foreach a (b..c)' to 'for a in xrange()
 sub addForeach($) {
 	my $line = shift;	
-	$line =~ s/\$//;
-	$line =~ s/{//;	
-	$line =~ /\s*foreach\s*(\w+)\s*\((.*)\.\.(.*)\)/;
+	
+	# Case: foreach(a..b):
+	if ($line =~ /.*\.\..*/) {
+		$line =~ s/\$//;
+		$line =~ s/{//;	
+		$line =~ /\s*foreach\s*(\w+)\s*\((.*)\.\.(.*)\)/;
 
-	my $capture1 = $1;
-	my $capture2 = $2;
-	my $capture3 = $3;
+		my $capture1 = $1;
+		my $capture2 = $2;
+		my $capture3 = $3;
 
-	if ($capture3 =~ /\$#sys.ARGV/i) {
-		push(@output, "for $capture1 in xrange(len(sys.argv) - 1):\n");
-	} else {
-		$capture3++;		
-		push(@output, "for $capture1 in range($capture2, $capture3):\n");
+		if ($capture3 =~ /\$#sys.ARGV/i) {
+			push(@output, "for $capture1 in xrange(len(sys.argv) - 1):\n");
+		} else {
+			$capture3++;		
+			push(@output, "for $capture1 in range($capture2, $capture3):\n");
+		}
 	}
 
+	# Case 2: Some kind of (simple) iteration over an array
+	elsif ($line =~ /\s*foreach\s*\$(\w+)\s*\(@\w+\)/) {
+		$line =~ s/{//;
+		$line =~ s/foreach (\$\w+)/for $1 in/;
+		$line =~ s/\$//;
+		$line =~ s/\@//;
+		$line =~ s/\(//;
+		$line =~ s/\)//;
+		$line =~ s/\s*$//;
+		$line .= ":";
+		push(@output, "$line\n");
+	}
 	
 }
 
@@ -547,6 +620,16 @@ sub addNextOrLast($) {
 	$line =~ s/next/continue/;
 	push(@output, "$line\n");
 }
+
+sub addPush($) {
+	my $line = shift;
+	
+	$line =~ s/\@//g;
+	$line =~ /\s*push\s*\((.+)\s*,\s*(.+)\s*\)/;
+	push(@output, "$1.append($2)\n");
+}
+
+
 
 sub convertStringConcat($) {
 	my $line = shift;	
@@ -568,6 +651,7 @@ sub convertStringConcat($) {
 	$line = join('', @string);
 	return $line;
 }
+
 
 
 sub printAllVars {
