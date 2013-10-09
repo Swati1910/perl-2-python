@@ -28,6 +28,7 @@ sub addSTDIN($);
 sub addElsif($);
 sub addChomp($);
 sub addResub($);
+sub addFor($);
 sub addForeach($);
 sub addPostIncOrDec($);
 sub addNextOrLast($);
@@ -184,6 +185,10 @@ sub convertPerl2Python(\@) {
 			addForeach($line);
 		}
 
+		elsif ($line =~ /for.*\(/) {
+			addFor($line);
+		}
+
 		# $a++ or $a--
 		elsif ($line =~ /\s*\w+\+\+/ || $line =~ /\s*\w+\-\-/) {
 			addPostIncOrDec($line);
@@ -208,6 +213,7 @@ sub convertPerl2Python(\@) {
 		#	comment
 		else {
 			addComment($line);
+			#debug($line);
 		}
 
 	}
@@ -636,6 +642,15 @@ sub addResub($) {
 		push(@output, "$1 = re.sub(r\'$2\', \'$3\', $1)\n");
 	}
 }
+
+#for x in xrange(100):
+sub addFor($) {
+
+	my $line = shift;
+	debug($line);
+
+}
+
 
 # foreach $i (0..4) {
 # for i in range(0, 5):
