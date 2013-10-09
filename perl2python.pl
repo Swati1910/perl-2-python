@@ -340,7 +340,8 @@ sub addCommentLine($) {
 sub addPrintStatement($) {
 	my $line = shift;
 
-	if ($line =~ /\w+\s*\$\w+/ || ($line =~ /.*\$.*/ && $line =~ /.*\s*.*/)) {
+	if ($line =~ /\w+\s*\$\w+/ || ($line =~ /.*\$.*/ && $line =~ /.*\s*.*/)
+		&& $line !~ /.*sys\.argv.*/) {
 		addComplicatedPrint($line);
 	
 	} else {
@@ -386,57 +387,6 @@ sub addComplicatedPrint($) {
 		@toPrint = $line;	
 	}
 
-=begin GHOSTCODE
-	my @varPrint;
-	my @strPrint;
-
-	if (@toPrint > 1) { 
-		foreach my $x (@toPrint) {
-			#$x =~ s/\s*//g;
-			$x =~ s/\$//;
-			$x =~ s/,//g;
-			if (defined($variables{$x})) {
-				push(@varPrint, "$x, ");
-			} elsif ($x =~ /[+*-\/%]/) {			
-				$varPrint[-1] =~ s/, // if (@varPrint>0); #delete trailing comma
-				push(@varPrint, " $x ");
-			} else {
-				push(@strPrint, $x);
-			}
-		}
-	} else { 
-		if (defined($variables{$toPrint[0]})) {
-			# Handle sys.argv[i]
-			$toPrint[0] =~ s/i/i + 1/ if ($toPrint[0] =~ /sys.argv\[\$?\w+\]/i);
-			push(@varPrint, $toPrint[0]); 
-		} else {			
-			push(@strPrint, $toPrint[0]);
-		}
-	}
-			$varPrint[-1] =~ s/,// if (@varPrint>0); #delete trailing comma
-
-	my $printStatement = "print ";
-
-
-
-	foreach my $y (@varPrint) {
-		$y =~ s/\s*$// if ($y !~ /\*/);
-		$printStatement .= $y;
-	}
-
-	if (@strPrint > 0) {
-		$printStatement .= ", \"";
-		foreach my $y (@strPrint) {
-			$printStatement .= $y;
-		}
-		$printStatement .= "\"";
-	}
-	push(@output, "$printStatement\n");
-
-=end GHOSTCODE
-=cut
-
-	
 
 	push(@output, "print ");
 
@@ -457,7 +407,8 @@ sub addComplicatedPrint($) {
 				push(@output, ", $x, ");
 			}
 			# a variable following a maths operator
-			elsif ($output[-1] =~ /[\+\-\*\/]/) { 
+			elsif ($output[-1] =~ /[\+\-\*\/]/ ||
+				   $output[-3] =~ /[\+\-\*\/]/) { 
 				push(@output, "$x");
 			}
 			# following another variable
@@ -468,26 +419,31 @@ sub addComplicatedPrint($) {
 			}
 		
 		# if we're printing a string component
-		} else { debug($output[-2]);
+		} else { 
 			# Start of print statement
 			if ($output[-1] eq "print ") { 
 				push(@output, "\"$x\"");
 			}
 			# Middle of string
-			elsif ($output[-1] =~ /\w+\s*\"/) {
-				$output[-1] =~ s/\"$/ /;
+			elsif ($output[-1] =~ /\w+\s*\"/ ||
+				   ($output[-1] =~ /\s*/ && $output[-2] =~ /\w+\s*\"/)) {
+				$output[-1] =~ s/\"$// if $output[-1] =~ /\w+\s*\"/;
+				$output[-2] =~ s/\"$// if $output[-2] =~ /\w+\s*\"/;
 				push(@output, "$x \"");
 			}
-			# following a variable
-			elsif ($output[-1] =~ /\w+,/) {
-				push(@output, "\"$x\"");
-			}
 			# maths operators
-			elsif ((defined($variables{$output[-3]})
-					&& $x =~ /[\+\-\*\/]/) ||
-					($output[-1] =~ /^\s*$/ && defined($variables{$output[-2]})
-					&& $x =~ /[\+\-\*\/]/)) { debug($x);
+			elsif ((defined($variables{$output[-1]}) || 
+				    defined($variables{$output[-2]}) ||
+				    defined($variables{$output[-3]}))
+					&& $x =~ /[\+\-\*\/]/) { 
+				
 				push(@output, $x);
+			}
+			# following a variable
+			elsif ($output[-1] =~ /\w+,/ ||
+				   ($output[-1] =~ /\s*/ && $output[-2] =~ /\w+/)) {
+				$output[-1] =~ s/^\s*$//;
+				push(@output, ", \"$x\"");
 			}
 		}
 	}
