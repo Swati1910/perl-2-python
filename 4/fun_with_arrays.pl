@@ -25,7 +25,6 @@ push(@veggiebox, "carrot");
 push (@healthy_things, @fruitbox);
 push (@healthy_things, @veggiebox);
 
-print "Now I have:\n";
-foreach $x (@healthy_things) {
-	print "$x\n";
-}
+my $list = join(', ', @healthy_things);
+
+print "Now I have $list ok\n";

@@ -33,6 +33,7 @@ sub addPostIncOrDec($);
 sub addNextOrLast($);
 sub addChomp($);
 sub addPush($);
+sub addJoin($);
 
 sub convertStringConcat($);
 
@@ -122,8 +123,8 @@ sub convertPerl2Python(\@) {
 		}
 
 		# Add print statements.
-		elsif ($line !~ /\".*\$(\w+).*/ && $line =~ /^\s*print\s*\"(.*)\\n\"[\s;]*$/
-				|| $line =~ /\s*print\s*\"([^\$].*)\"/) {	
+		elsif (!($line =~ /.*'$'.*/) && $line =~ /^\s*print\s*\"(.*)\\n\"[\s;]*$/
+				|| $line =~ /\s*print\s*\"([^\$].*)\"/) { 
 			addPrintStatement($1);
 		}
 
@@ -339,20 +340,31 @@ sub addCommentLine($) {
 sub addPrintStatement($) {
 	my $line = shift;
 
-	if ($line =~ /\$\w+/) {
-			$line =~ s/\$//g;
+	if ($line =~ /\w+\s*\$\w+/ || ($line =~ /.*\$.*/ && $line =~ /.*\s*.*/)) {
+		addComplicatedPrint($line);
+	
+	} else {
+	
+		if ($line =~ /\\n$/) {
+			$line =~ s/\\n//;
 		}
 
-	if ($line =~ /ARGV\[(.*)\]/) {
-		$line = "print sys.argv[$1 + 1]";
-	}
-	elsif (defined($variables{$line})) {
-		$line = "print $line";
-	} else {
-		$line = "print \"$line\"";
-	}
+		if ($line =~ /\$\w+/) {
+				$line =~ s/\$//g;
+			}
 
-	push(@output, "$line\n");
+		if ($line =~ /ARGV\[(.*)\]/ ||
+			$line =~ /sys.argv\[(.*)\]/) {
+			$line = "print sys.argv[$1 + 1]";
+		}
+		elsif (defined($variables{$line})) {
+			$line = "print $line";
+		} else {
+			$line = "print \"$line\"";
+		}
+
+		push(@output, "$line\n");
+	}
 }
 
 sub addComplicatedPrint($) {
@@ -361,6 +373,7 @@ sub addComplicatedPrint($) {
 	$line =~ s/\\n//;
 	$line =~ s/\$//g;
 	$line =~ s/\"//g;
+	$line =~ s/,//g;
 
 #debug($line);
 #printAllVars;
@@ -368,18 +381,18 @@ sub addComplicatedPrint($) {
 	my @toPrint;
 
 	if ($line !~ /.*argv.*/) {
-		@toPrint = split(' ', $line);
+		@toPrint = split(/([ -+*])/, $line);
 	} else {
 		@toPrint = $line;	
 	}
 
-
+=begin GHOSTCODE
 	my @varPrint;
 	my @strPrint;
 
 	if (@toPrint > 1) { 
-		foreach my $x (@toPrint) { 
-			$x =~ s/\s*//g;
+		foreach my $x (@toPrint) {
+			#$x =~ s/\s*//g;
 			$x =~ s/\$//;
 			$x =~ s/,//g;
 			if (defined($variables{$x})) {
@@ -404,6 +417,8 @@ sub addComplicatedPrint($) {
 
 	my $printStatement = "print ";
 
+
+
 	foreach my $y (@varPrint) {
 		$y =~ s/\s*$// if ($y !~ /\*/);
 		$printStatement .= $y;
@@ -417,6 +432,67 @@ sub addComplicatedPrint($) {
 		$printStatement .= "\"";
 	}
 	push(@output, "$printStatement\n");
+
+=end GHOSTCODE
+=cut
+
+	
+
+	push(@output, "print ");
+
+	foreach my $x (@toPrint) {
+
+		# Spaces can go straight on
+		if ($x =~ /^\s*$/) { 
+			push(@output, "$x");
+		}
+		# printing a defined variable
+		elsif (defined($variables{$x})) { 
+			# start of print statement
+			if ($output[-1] eq "print ") { 
+				push(@output, "$x");
+			}
+			# if the statement contains the end of a string
+			elsif ($output[-1] =~ /\w+\s*\"/) { 
+				push(@output, ", $x, ");
+			}
+			# a variable following a maths operator
+			elsif ($output[-1] =~ /[\+\-\*\/]/) { 
+				push(@output, "$x");
+			}
+			# following another variable
+			elsif ($output[-1] =~ /\w+,?/ ||
+				($output[-1] =~ /^\s*$/ && $output[-2] =~ /\w+/)) { 
+				$output[-1] =~ s/ // if $output[-1] =~ /^\s*$/;
+				push(@output, ", $x");
+			}
+		
+		# if we're printing a string component
+		} else { debug($output[-2]);
+			# Start of print statement
+			if ($output[-1] eq "print ") { 
+				push(@output, "\"$x\"");
+			}
+			# Middle of string
+			elsif ($output[-1] =~ /\w+\s*\"/) {
+				$output[-1] =~ s/\"$/ /;
+				push(@output, "$x \"");
+			}
+			# following a variable
+			elsif ($output[-1] =~ /\w+,/) {
+				push(@output, "\"$x\"");
+			}
+			# maths operators
+			elsif ((defined($variables{$output[-3]})
+					&& $x =~ /[\+\-\*\/]/) ||
+					($output[-1] =~ /^\s*$/ && defined($variables{$output[-2]})
+					&& $x =~ /[\+\-\*\/]/)) { debug($x);
+				push(@output, $x);
+			}
+		}
+	}
+	push(@output, "\n");
+
 }
 
 # If a variable is defined as one thing, and then 
@@ -439,8 +515,12 @@ sub addVariableDec($) {
 		$line = convertStringConcat($line);
 	}
 
+	if ($line =~ /=\s*join\s*\(/) {
+		addJoin($line);
+	}
 
-	if (defined($variables{$assignment[0]})) {
+
+	elsif (defined($variables{$assignment[0]})) {
 		# Check what type it is HAS been declared previously
 		#	against what is being assigned to it now.
 		# Case 1: HAS been assigned an int, IS being assigned an int.
@@ -621,12 +701,38 @@ sub addNextOrLast($) {
 	push(@output, "$line\n");
 }
 
+# Python treats arrays differently.
+# Appending a list to another list puts the list INSIDE the other list
 sub addPush($) {
 	my $line = shift;
+
 	
-	$line =~ s/\@//g;
 	$line =~ /\s*push\s*\((.+)\s*,\s*(.+)\s*\)/;
-	push(@output, "$1.append($2)\n");
+
+	my $first = $1;
+	my $second = $2;
+
+	# If it's a string we will use append
+	if ($2 =~ /^\s*\".*/) {
+		$first =~ s/\@//g;
+		push(@output, "$first.append($second)\n");
+	}
+	# If it's another list we will use extend
+	elsif ($2 =~ /^\s*\@/) {
+		$first =~ s/\@//g;
+		$second =~ s/\@//g;
+		push(@output, "$first.extend($second)\n");
+	}
+}
+
+# list = join(', ', @healthy_things)
+# list = ", ".join(healthy_things)
+sub addJoin($) {
+	my $line = shift;
+
+	$line =~ s/\@//;
+	$line =~ /\s*(\w+)\s*=\s*join\(([\'\"].*[\'\"]),\s*(.*)\)/;
+	push(@output, "$1 = $2.join($3)\n");
 }
 
 

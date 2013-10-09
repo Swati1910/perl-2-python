@@ -20,9 +20,9 @@ fruitbox.append("apple")
 veggiebox.append("carrot")
 
 healthy_things = []
-healthy_things.append(fruitbox)
-healthy_things.append(veggiebox)
+healthy_things.extend(fruitbox)
+healthy_things.extend(veggiebox)
 
-print "Now I have:"
-for x in healthy_things:
-    print x
+list = ', '.join(healthy_things)
+
+print "Now I  have ", list, "ok"
