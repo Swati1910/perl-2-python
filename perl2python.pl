@@ -3,9 +3,9 @@
 
 use warnings;
 use strict;
-use diagnostics;
+#use diagnostics;
 
-my $debugOn = 1;	#set to 1 to turn debug messages on.
+my $debugOn = 0;	#set to 1 to turn debug messages on.
 
 
 sub debug($);
@@ -52,9 +52,15 @@ my $tab = "    ";
 
 # We begin by reading the entire file into 
 #	an array.
-open PERL, $ARGV[0] or die "Could not open file $ARGV[0]: $!\n";
+my @perl;
+if ($ARGV[0]) {
+	open PERL, $ARGV[0];
+	@perl = <PERL>;
+} else {
+ 	@perl = <STDIN>;
+}
 
-my @perl = <PERL>;
+
 
 # Order is important here.
 # Build the new file as follows:

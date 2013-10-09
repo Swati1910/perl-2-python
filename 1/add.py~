@@ -7,7 +7,6 @@ for x in xrange(0, 100, 1):
     total = total + 1
 print total
 
-# these spaces may be tricky for some!
 for x in xrange(100, 0, -1):
     total = total - 1
 print total
