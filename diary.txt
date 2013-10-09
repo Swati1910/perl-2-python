@@ -1,0 +1,137 @@
+commit 0ef3b1cc4dc48118f981c035dbc0e0980059b13b
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Wed Oct 9 22:36:28 2013 +1100
+
+    Finished
+
+commit 0c119144f34ba409d50438e910bfa440d1f2681b
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Wed Oct 9 21:33:36 2013 +1100
+
+    1 hour: Debugging and testing, writing final demo scripts
+
+commit 588f18576b3fb1615d1794962865fe4a1d0ee2c1
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Wed Oct 9 21:11:31 2013 +1100
+
+    1 hour: Debugging and further testing
+
+commit 863ecbf5af8f39439380b3dff15fd421d70e1cb1
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Wed Oct 9 17:07:15 2013 +1100
+
+    30 mins: Print statements
+
+commit 33f0168cbb8d1835ebf15493c95f8eafd4fe1ea4
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Wed Oct 9 16:30:36 2013 +1100
+
+    1 hour: worked on print statements
+
+commit d6668d08d9bc83ce98fc19c695fddda744b385ee
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Tue Oct 8 23:45:39 2013 +1100
+
+    1 hour: Almost finished arrays, weirdness occuring with appending
+
+commit 83c6071fc24ad7703f9c0dfb9836a396e4647fed
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Tue Oct 8 20:35:10 2013 +1100
+
+    1 hour: Worked on basic support for logical operators, last, next, and bitwise
+
+commit 55462d59d0ba7718dcffa09311da82331f1ae897
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Mon Oct 7 22:59:47 2013 +1100
+
+    Debugged print statements and added functionality to handle complex arithmetic
+
+commit 6c2665b80a6c28a39a908ac4863d23655a9f4aa6
+Author: aidan <aidan@felsic.(none)>
+Date:   Mon Oct 7 14:33:16 2013 +1100
+
+    30 mins: Debugging
+
+commit 54f08bc7c66c56d30b924b41268d75eda2b559c4
+Author: aidan <aidan@felsic.(none)>
+Date:   Sun Oct 6 21:36:15 2013 +1100
+
+    Fixed bug where string concat would translate decimal points to pluses
+
+commit f87dd5f64574ce8969dea1582c22b7fbb2d79836
+Author: aidan <aidan@felsic.(none)>
+Date:   Sun Oct 6 21:30:59 2013 +1100
+
+    Completed string concat support at 20,000ft
+
+commit 45750a199d681fdf694bd833456cdd49914c51b3
+Author: aidan <aidan@felsic.(none)>
+Date:   Sat Oct 5 16:34:05 2013 +1000
+
+    1 hour: worked on string concat and more advanced print statements
+
+commit 78c912fe70f9cfeb985c0e03d58238cb87098808
+Author: aidan <aidan@felsic.(none)>
+Date:   Fri Oct 4 17:00:23 2013 +1000
+
+    2 hours: Started debugging for subset 4. Need to work on complicated print statements. Forced by flight attendant  to turn computer off despite recent FAA ruling.
+
+commit 51e3e260d5f2d03329192930dcf46605675f5e04
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Thu Oct 3 16:38:23 2013 +1000
+
+    2 hours: Added suport for post increment/decrement, started supporting more complicated print statements as well as some debugging
+
+commit 6ca3b8c7313354604ff9ac1ad18eace4d64d18f8
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Tue Oct 1 20:23:35 2013 +1000
+
+    1hr: Added support for casting
+
+commit b86d9fa08c6aee45e49ae36df86b186b9a48442e
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Mon Sep 30 20:00:34 2013 +1000
+
+    30 mins: Added support for arbitrarily deeply nested conditional statements
+
+commit 68cf75cd1ed457952c180c0cd2295afcd9144f93
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Sat Sep 28 14:42:29 2013 +1000
+
+    2 hours: Added small recursive subroutine to handle conditionals. Program works with everything in subset 2 now. All conditionals work.
+
+commit 51fca251a702ffd47b5c23ddb29f87b514fba314
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Thu Sep 26 18:39:15 2013 +1000
+
+    30 mins: Finished testing and coding for subset 1. Works perfectly now, with added test cases.
+
+commit 5b009acb8df9ce42db5dfa3c8e5784c1ba8f1134
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Wed Sep 25 17:55:35 2013 +1000
+
+    2 hours: Ported code over to new version which uses functions for to add lines to an array which is printed after evaluation. Works up to 1/answer4.pl.
+
+commit b72070f719d92c95baaf11e7a03640cdb6506e99
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Fri Sep 13 17:36:14 2013 +1000
+
+    30 mins: Implemented variable tracking and check upon print in python. Having an issue with newlines at end of files
+
+commit 9999968ca1f1387d52e734d99859fd754d68d6d4
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Tue Sep 10 18:30:31 2013 +1000
+
+    Tweaked test script to give useful output upon test failure. Started working on level 1 perl files
+
+commit ab3be65a433b2375efb78af7d6b3f9144226d9fa
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Tue Sep 10 18:06:23 2013 +1000
+
+    Added test files from assignment spec and completed auto-testing perl script.
+
+commit 08f03f62744f5928c53e2b47a51065932d44202f
+Author: Aidan Barrington <aidanb@gmail.com>
+Date:   Mon Sep 9 22:23:09 2013 -0700
+
+    Initial commit
