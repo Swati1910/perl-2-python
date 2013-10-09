@@ -1,4 +1,5 @@
 #!/usr/bin/python2.7 -u
+import re
 
 fruitbox = []
 veggiebox = []
@@ -26,3 +27,15 @@ healthy_things.extend(veggiebox)
 list = ', '.join(healthy_things)
 
 print "Now I  have ", list, "ok"
+
+lunch = list.split(', ')
+
+print "I'm lazy so here's lunch: "
+for x in lunch:
+    print x
+
+# we can also split on a regex!
+secondList = re.split('/\s+/', list)
+print "I'm very lazy so here's dinner: "
+for x in secondList:
+    print x

@@ -34,8 +34,10 @@ sub addNextOrLast($);
 sub addChomp($);
 sub addPush($);
 sub addJoin($);
+sub addSplit($);
 
 sub convertStringConcat($);
+sub willBeUsedAsInt($);
 
 # TESTING
 sub printAllVars;
@@ -112,13 +114,13 @@ sub convertPerl2Python(\@) {
 		# Array declarations
 		elsif ($line !~ /.*push.*/ && $line =~ /[^\(]@\w+.*/ || 
 				$line =~ /^\s*\@\w+\s*=\s*\(\'?\"?\w+/ || 
-					$line =~ /^\s*\@\w+/) {
+					$line =~ /^\s*\@\w+/) { 
 			addArray($line);
 		}
 
 		# Check for prompt prints
 		elsif ($line =~ /.*print "(>) "/ && defined($imports{sys}) ||
-			   $line =~ /.*print \"(.*:)\s*\"/ && defined($imports{sys})) {
+			   $line =~ /.*print \"(.*:)\s*\"/ && defined($imports{sys})) { 
 			push(@output, "sys.stdout.write(\"$1 \")\n");
 		}
 
@@ -131,7 +133,8 @@ sub convertPerl2Python(\@) {
 		# If the print statement is more complicated than 
 		#	just "print $variable" or "print string" we handle
 		#	it differently.
-		elsif ($line =~ /^\s*print\s*\$/ || $line =~ /\".*\$(\w+).*/) {
+		elsif ($line =~ /^\s*print\s*\$/ || $line =~ /\".*\$(\w+).*/ 
+				|| $line =~ /print\s*join/) { 
 
 			addComplicatedPrint($line);
 		}
@@ -171,7 +174,7 @@ sub convertPerl2Python(\@) {
 		}
 
 		# regex SUB (eg line =~ s/[aeiou]//g;)
-		elsif ($line =~ /\s*\w+\s*=~\s*s\/\[?]?.*\/.*\/[ig]/i) {
+		elsif ($line =~ /\s*\w+\s*=~\s*s\/\[?\]?.*\/.*\/[ig]?/i) {
 			addResub($line);
 		}
 
@@ -274,11 +277,12 @@ sub findImports(\@) {
 			$imports{fileinput}++;
 		} 	
 		#system access -> sys
-		if ($line =~ /((open)|(close)|(STDIN)|(STDOUT)|(STDERR)|(\&1)|(\&2)|(ARGV))/) {
+		if ($line =~ /((open)|(close)|(STDIN)|(STDOUT)|(STDERR)|(\&1)|(\&2)|(ARGV)|while <>)/) {
 			$imports{sys}++;
 		}
 		#regex -> re
-		if ($line =~ /\=\~/) {
+		if ($line =~ /\=\~/ ||
+			 $line =~ /.*split\s*\(\//) {
 			$imports{re}++;
 		}		
 	}
@@ -371,79 +375,84 @@ sub addPrintStatement($) {
 sub addComplicatedPrint($) {
 	my $line = shift;
 	$line =~ s/print //;
-	$line =~ s/\\n//;
-	$line =~ s/\$//g;
-	$line =~ s/\"//g;
-	$line =~ s/,//g;
-
-#debug($line);
-#printAllVars;
-
-	my @toPrint;
-
-	if ($line !~ /.*argv.*/) {
-		@toPrint = split(/([ -+*])/, $line);
+	
+	if ($line =~ /\s*join\(/) {
+		$line =~ /\s*join\((.*),\s*(.*)\)/;
+		push(@output, "print $1.join($2\[1:])");
+	
 	} else {
-		@toPrint = $line;	
-	}
 
+		$line =~ s/\\n//;
+		$line =~ s/\$//g;
+		$line =~ s/\"//g;
+		$line =~ s/,//g;
 
-	push(@output, "print ");
+		my @toPrint;
 
-	foreach my $x (@toPrint) {
-
-		# Spaces can go straight on
-		if ($x =~ /^\s*$/) { 
-			push(@output, "$x");
+		if ($line !~ /.*argv.*/) {
+			@toPrint = split(/([ -+*])/, $line);
+		} else {
+			@toPrint = $line;	
 		}
-		# printing a defined variable
-		elsif (defined($variables{$x})) { 
-			# start of print statement
-			if ($output[-1] eq "print ") { 
+
+
+		push(@output, "print ");
+
+		foreach my $x (@toPrint) {
+
+			# Spaces can go straight on
+			if ($x =~ /^\s*$/) { 
 				push(@output, "$x");
 			}
-			# if the statement contains the end of a string
-			elsif ($output[-1] =~ /\w+\s*\"/) { 
-				push(@output, ", $x, ");
-			}
-			# a variable following a maths operator
-			elsif ($output[-1] =~ /[\+\-\*\/]/ ||
-				   $output[-3] =~ /[\+\-\*\/]/) { 
-				push(@output, "$x");
-			}
-			# following another variable
-			elsif ($output[-1] =~ /\w+,?/ ||
-				($output[-1] =~ /^\s*$/ && $output[-2] =~ /\w+/)) { 
-				$output[-1] =~ s/ // if $output[-1] =~ /^\s*$/;
-				push(@output, ", $x");
-			}
-		
-		# if we're printing a string component
-		} else { 
-			# Start of print statement
-			if ($output[-1] eq "print ") { 
-				push(@output, "\"$x\"");
-			}
-			# Middle of string
-			elsif ($output[-1] =~ /\w+\s*\"/ ||
-				   ($output[-1] =~ /\s*/ && $output[-2] =~ /\w+\s*\"/)) {
-				$output[-1] =~ s/\"$// if $output[-1] =~ /\w+\s*\"/;
-				$output[-2] =~ s/\"$// if $output[-2] =~ /\w+\s*\"/;
-				push(@output, "$x \"");
-			}
-			# maths operators
-			elsif ((defined($variables{$output[-1]}) || 
-				    defined($variables{$output[-2]}) ||
-				    defined($variables{$output[-3]}))
-					&& $x =~ /[\+\-\*\/]/) { 
-				
-				push(@output, $x);
-			}
-			# following a variable
-			elsif ($output[-1] =~ /\w+,/ ||
-				   ($output[-1] =~ /\s*/ && $output[-2] =~ /\w+/)) {
-				$output[-1] =~ s/^\s*$//;
-				push(@output, ", \"$x\"");
+			# printing a defined variable
+			elsif (defined($variables{$x})) { 
+				# start of print statement
+				if ($output[-1] eq "print ") { 
+					push(@output, "$x");
+				}
+				# if the statement contains the end of a string
+				elsif ($output[-1] =~ /\w+\s*\"/) { 
+					push(@output, ", $x, ");
+				}
+				# a variable following a maths operator
+				elsif ($output[-1] =~ /[\+\-\*\/]/ ||
+					   $output[-3] =~ /[\+\-\*\/]/) { 
+					push(@output, "$x");
+				}
+				# following another variable
+				elsif ($output[-1] =~ /\w+,?/ ||
+					($output[-1] =~ /^\s*$/ && $output[-2] =~ /\w+/)) { 
+					$output[-1] =~ s/ // if $output[-1] =~ /^\s*$/;
+					push(@output, ", $x");
+				}
+			
+			# if we're printing a string component
+			} else { 
+				# Start of print statement
+				if ($output[-1] eq "print ") { 
+					push(@output, "\"$x\"");
+				}
+				# Middle of string
+				elsif ($output[-1] =~ /\w+\s*\"/ ||
+					   ($output[-1] =~ /\s*/ && $output[-2] =~ /\w+\s*\"/)) {
+					$output[-1] =~ s/\"$// if $output[-1] =~ /\w+\s*\"/;
+					$output[-2] =~ s/\"$// if $output[-2] =~ /\w+\s*\"/;
+					push(@output, "$x \"");
+				}
+				# maths operators
+				elsif ((defined($variables{$output[-1]}) || 
+					    defined($variables{$output[-2]}) ||
+					    defined($variables{$output[-3]}))
+						&& $x =~ /[\+\-\*\/]/) { 
+					
+					push(@output, $x);
+				}
+				# following a variable
+				elsif ($output[-1] =~ /\w+,/ ||
+					   ($output[-1] =~ /\s*/ && $output[-2] =~ /\w+/)) {
+					$output[-1] =~ s/^\s*$//;
+					push(@output, ", \"$x\"");
+				}
 			}
 		}
 	}
@@ -471,8 +480,13 @@ sub addVariableDec($) {
 		$line = convertStringConcat($line);
 	}
 
+
 	if ($line =~ /=\s*join\s*\(/) {
 		addJoin($line);
+	}
+
+	elsif ($line =~ /=\s*split\s*\(/) {
+		addSplit($line);
 	}
 
 
@@ -485,14 +499,14 @@ sub addVariableDec($) {
 			push(@output, "$line\n");
 		# Case 2: HAS been assigned an int, IS being assigned a string.
 		} elsif ($variables{$assignment[0]} =~  /^\s*\d+\s*/ &&
-			$assignment[1] =~  /^\s*\w+\s*/) {
+			$assignment[1] =~  /^\s*\w+\s*/) { 
 			my $values = $assignment[1];
 			$values =~ s/\+//;
 			$values =~ s/\-//;
 			my @values = split(' ', $values);
 			# If there's more than one value being assigned to it, just assume 
 			#	the word must be a variable.
-			if (@values > 1) {
+			if (@values > 1) { 
 				push(@output, "$line\n");
 				} else {
 					push(@output, "$assignment[0] = int($assignment[1])\n") ;
@@ -503,12 +517,15 @@ sub addVariableDec($) {
 			push(@output, "$line\n"); 
 		# Case 4: assigned to STDIN
 		} elsif ($variables{$assignment[0]} =~ /<STDIN>/){
-			push(@output, "$assignment[0] = int(sys.stdin.readline())\n");
-		
+			if (willBeUsedAsInt($assignment[0])) {
+				push(@output, "$assignment[0] = int(sys.stdin.readline())\n");
+			} else {
+				push(@output, "$assignment[0] = sys.stdin.readline()\n");
+			}
 		} else {
 			push(@output, "$line\n");
 		}
-	# HAS NOT been assigned anything, is being assigned SYS.stdin
+	# HAS NOT been assigned anything
 	} else {
 		push(@output, "##$line\n");
 	}
@@ -517,8 +534,18 @@ sub addVariableDec($) {
 sub addArray($) {
 	my $line = shift;
 
+	# @ARGV may get caught here
+	if ($line =~ /.*\@sys.argv.*/) {
+		$line=~ s/\@//;
+		my @line = $line;
+		convertPerl2Python(@line);
+	}
+
+	if ($line =~ /.*=\s*split/) {
+		addSplit($line);
+	}
 	# Array declaration
-	if ($line =~ /[^\(]@\w+.*/) {
+	elsif ($line =~ /[^\(]@\w+.*/) {
 		$line =~ s/my //;
 		$line =~ s/@//;
 		$line .= " = []";
@@ -558,9 +585,11 @@ sub addConditional($) {
 	$line =~ s/\|\|/or/;
 	$line =~ s/!/not / if $line !~ /!=/;
 
+	$line =~ s/eq/==/;
+
 	# Handle "while line = <>" first
 	if ($line =~ /\s*while\s*(\w+)\s*=\s*<>/ ) {
-		push(@output, "for $1 in fileinput.input():\n");
+		push(@output, "for $1 in sys.stdin:\n");
 	# All other conditionals:
 	# while line = sys.stdin.readline()
 	# for line in sys.stdin:
@@ -596,11 +625,16 @@ sub addChomp($) {
 
 
 # Translates a = s/x/y/ to a= re.sub(r'x', 'y', a)
+#	re.sub(pattern, repl, string, count=0, flags=0)
 sub addResub($) {
 	my $line = shift;
-	$line =~ /\s*\$?(\w+)\s*=~\s*s\/(\[?]?.*)\/(.*)\/[ig]/;
+	$line =~ /\s*\$?(\w+)\s*=~\s*s\/(\[?]?.*)\/(.*)\/(g?)/;
 
-	push(@output, "$1 = re.sub(r\'$2\', \'$3\', $1)\n");
+	if ($4 ne "g") {
+		push(@output, "$1 = re.sub(r\'$2\', \'$3\', $1, 1)\n");
+	} else {
+		push(@output, "$1 = re.sub(r\'$2\', \'$3\', $1)\n");
+	}
 }
 
 # foreach $i (0..4) {
@@ -623,7 +657,7 @@ sub addForeach($) {
 			push(@output, "for $capture1 in xrange(len(sys.argv) - 1):\n");
 		} else {
 			$capture3++;		
-			push(@output, "for $capture1 in range($capture2, $capture3):\n");
+			push(@output, "for $capture1 in xrange($capture2, $capture3):\n");
 		}
 	}
 
@@ -691,7 +725,29 @@ sub addJoin($) {
 	push(@output, "$1 = $2.join($3)\n");
 }
 
+# Python has different ways to split string:
+#	str.split for spliting on a string
+#	re.split for splitting on a regex
+sub addSplit($) {
+	my $line = shift;
 
+	$line =~ s/my //;
+	$line =~ s/@//;
+	$line =~ s/\$//;
+
+	$line =~ /(\w+)\s*=\s*split\((.*), (.*)\)/;
+
+	my ($list, $splitOn, $toSplit) = ($1, $2, $3);
+
+	# splitting on a regex:
+	if ($splitOn =~ /^\/.*\/$/) {
+		push(@output, "$list = re.split(\'$splitOn\', $toSplit)\n");
+	}
+	# splitting on a string
+	elsif ($splitOn =~ /^[\"\'].*[\"\']$/) {
+		push(@output, "$list = $toSplit.split($splitOn)\n")
+	}
+}
 
 sub convertStringConcat($) {
 	my $line = shift;	
@@ -714,6 +770,24 @@ sub convertStringConcat($) {
 	return $line;
 }
 
+# used to determine whether a given variable is likely
+#	to be used as an int or not.
+sub willBeUsedAsInt($) {
+
+	my $var = '$';
+	$var .= shift;
+
+	my $usedAsInt ;
+
+	foreach my $line (@perl) {
+
+		if ($line =~ /.*\Q$var\E\s*[=<>\*]*.*\d+/i) {
+			$usedAsInt = 1;
+			last;
+		}
+	}
+	return $usedAsInt;
+}
 
 
 sub printAllVars {

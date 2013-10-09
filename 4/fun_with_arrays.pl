@@ -28,3 +28,17 @@ push (@healthy_things, @veggiebox);
 my $list = join(', ', @healthy_things);
 
 print "Now I have $list ok\n";
+
+my @lunch = split(', ', $list);
+
+print "I'm lazy so here's lunch: \n";
+foreach $x (@lunch) {
+	print "$x\n";
+}
+
+# we can also split on a regex!
+@secondList = split(/\s+/, $list);
+print "I'm very lazy so here's dinner: \n";
+foreach $x (@secondList) {
+	print "$x\n";
+}
