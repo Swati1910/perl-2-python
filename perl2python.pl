@@ -31,6 +31,7 @@ sub addResub($);
 sub addFor($);
 sub addForeach($);
 sub addPostIncOrDec($);
+sub addPlusMinusEquals($);
 sub addNextOrLast($);
 sub addChomp($);
 sub addPush($);
@@ -185,13 +186,20 @@ sub convertPerl2Python(\@) {
 			addForeach($line);
 		}
 
+		# for ...
 		elsif ($line =~ /for.*\(/) {
+			$insideConditional++;
 			addFor($line);
 		}
 
 		# $a++ or $a--
 		elsif ($line =~ /\s*\w+\+\+/ || $line =~ /\s*\w+\-\-/) {
 			addPostIncOrDec($line);
+		}
+
+		#+= or -=
+		elsif ($line =~ /\w+\s*[\+-]+=/) {
+			addPlusMinusEquals($line);
 		}
 
 		# last or next
@@ -643,12 +651,44 @@ sub addResub($) {
 	}
 }
 
-#for x in xrange(100):
+#for x in xrange(100):\
+# xrange(start, stop, step);
 sub addFor($) {
 
 	my $line = shift;
-	debug($line);
+	$line =~ s/;//;
 
+	$line =~ /for\s*\((\$\w+\s*=\s*\d*)\s*(\$\w+\s*[<>]\s*\d*)\s*(\$\w+\s*[+-]*)/;
+
+	my ($start, $stop, $step) = ($1, $2, $3);
+
+	$start =~ s/\s*//g;
+	$stop =~ s/\s*//g;
+	$step =~ s/\s*//g;
+
+	$start =~ s/\$//;
+	$stop =~ s/\$//;
+	$step =~ s/\$//;
+
+	my $var = $start;
+	$var =~ s/=//;
+	$var =~ s/\d//g;
+
+	$start =~ s/\w//;
+	$start =~ s/=//;
+
+	# doesn't matter if we lose the < or > as 
+	#	python just needs the stopping value
+	$stop =~ s/<//;
+	$stop =~ s/>//;
+	$stop =~ s/\w//;
+
+	if ($step =~ /\+\+/) {
+		$step = 1;
+	} elsif ($step =~ /\-\-/) {
+		$step = -1;
+	}
+	push(@output, "for $var in xrange($start, $stop, $step):\n");
 }
 
 
@@ -697,6 +737,15 @@ sub addPostIncOrDec($) {
 	my @incOrDec = split('', $2);
 
 	push(@output, "$1 $incOrDec[0]= 1\n");
+}
+
+sub addPlusMinusEquals($) {
+	my $line = shift;
+
+	$line =~ /(\w+)\s*([\+-])=/;
+
+	push(@output, "$1 = $1 $2 1\n")
+	
 }
 
 sub addNextOrLast($) {
